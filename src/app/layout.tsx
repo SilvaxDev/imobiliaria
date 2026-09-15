@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
-import { SmoothScrollProvider } from "@/components/layout/smooth-scroll-provider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -25,9 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="pt-BR"
       className={`${fraunces.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-paper text-ink">
-        <SmoothScrollProvider>{children}</SmoothScrollProvider>
-      </body>
+      <body className="min-h-full bg-paper text-ink">{children}</body>
     </html>
   );
 }
