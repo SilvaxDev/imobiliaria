@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Central Imóveis — Protótipo web
+# Central Imóveis — Site + Painel
 
 Este arquivo é a especificação principal do projeto. Qualquer trabalho
 futuro (novas seções, ajustes visuais, novas animações) deve ser
@@ -10,13 +10,26 @@ sóbrio e editorial — não o mais chamativo.
 
 ## Objetivo
 
-Protótipo visual/comercial (não o site definitivo) para apresentar uma
-nova direção de marca da **Central Imóveis** (Instagram [@imobcim](https://instagram.com/imobcim)).
+Site real (não mais um protótipo descartável) para a **Central Imóveis**
+(Instagram [@imobcim](https://instagram.com/imobcim)), com foco em
+aluguel: site público com listagem/filtro de imóveis e painel
+administrativo autenticado para o cliente gerenciar o próprio catálogo.
+A direção visual editorial nasceu como protótipo de marca, mas agora é a
+identidade real do site em produção — todas as regras de design, cores,
+tipografia e animação abaixo continuam valendo integralmente, inclusive
+para as telas funcionais (listagem, detalhe do imóvel, painel).
 
 A experiência deve ler como um site editorial de arquitetura/imobiliário
 premium — não como um template de imobiliária, não como um SaaS, não
 como algo "tech demo". A sensação-alvo: sofisticada, confiável, elegante,
-contemporânea, cinematográfica, humana, premium.
+contemporânea, cinematográfica, humana, premium. Isso vale até para a
+listagem de imóveis: cards sóbrios (foto grande, legenda mínima, sem
+sombra/borda arredondada genérica), nunca o visual de "grid de imobiliária
+com badge de preço".
+
+O painel administrativo (`/painel/**`) é ferramenta interna — não precisa
+seguir a mesma linguagem editorial da marca, só precisa ser funcional,
+acessível e consistente com os tokens de cor (`ink`/`paper`/`gold`).
 
 ## Identidade visual
 
@@ -51,33 +64,79 @@ contemporânea, cinematográfica, humana, premium.
 - GSAP + ScrollTrigger
 - Lenis (smooth scroll)
 - Lucide React (ícones)
+- Prisma (ORM) + Postgres, com driver adapter (`@prisma/adapter-pg`) —
+  ver "Dados e autenticação" abaixo para o porquê do adapter
+- Autenticação própria e mínima: `bcryptjs` (hash de senha) + `jose`
+  (sessão JWT em cookie httpOnly), seguindo o padrão documentado em
+  `node_modules/next/dist/docs/01-app/02-guides/authentication.md`.
+  Sem NextAuth/Auth.js: um único usuário admin, sem OAuth, sem
+  múltiplos papéis — a biblioteca completa seria complexidade sem
+  benefício aqui (ver "Painel administrativo").
+- `zod` para validação de formulários (Server Actions)
+- `@vercel/blob` para upload de fotos dos imóveis (ver "Dados e
+  autenticação")
 
 Avaliar Three.js/WebGL **apenas** se surgir uma necessidade visual real
 e específica (ex.: um efeito de profundidade que scroll/CSS/GSAP puro
 não resolvem bem). Não adicionar por adicionar.
 
+### ⚠️ Este Next.js não é o que está no seu treinamento
+
+Next 16 mudou convenções que quebram suposições comuns — **antes de usar
+qualquer API do framework não confirmada neste projeto, confira
+`node_modules/next/dist/docs/`** (ver `AGENTS.md`). Duas mudanças já
+mordidas neste projeto:
+
+- `middleware.ts` foi renomeado para **`proxy.ts`** (`export default
+  function proxy(request)`), com a mesma função de sempre. O arquivo
+  deste projeto é `src/proxy.ts`.
+- Prisma 7 não lê mais `datasource.url` do `schema.prisma`: a URL de
+  conexão para Migrate vive em `prisma7.config.ts`, e o `PrismaClient`
+  em runtime recebe um **driver adapter** explícito (`@prisma/adapter-pg`
+  neste projeto) em vez de ler `DATABASE_URL` sozinho. Ver
+  `src/lib/prisma.ts`.
+
 ## Arquitetura
 
 ```
+prisma/
+  schema.prisma            modelos Imovel, Foto, User
+  seed.ts                   cria/atualiza o usuário admin (via env vars)
+prisma7.config.ts           config do Prisma CLI (migrations, DATABASE_URL)
 src/
   app/
-    layout.tsx          fontes, metadata, SmoothScrollProvider
-    page.tsx             composição das seções da landing
-    globals.css           design tokens (@theme) + estilos base
+    layout.tsx               fontes, metadata, SmoothScrollProvider
+    page.tsx                 composição das seções da landing (Home)
+    globals.css               design tokens (@theme) + estilos base
+    imovel/[id]/page.tsx       detalhe público de um imóvel
+    painel/
+      login/page.tsx           login (fora do route group protegido)
+      (protected)/layout.tsx    verifySession() + chrome do painel
+      (protected)/imoveis/       list / novo / [id]/editar
   components/
-    layout/                chrome persistente (header, providers)
-    sections/               uma seção da landing = um arquivo
-    ui/                    peças pequenas e reutilizáveis (Mark, ScrollCue…)
+    layout/                 chrome persistente (header, footer, providers)
+    sections/                uma seção da landing = um arquivo
+    ui/                     peças pequenas e reutilizáveis (Mark, PropertyCard…)
+    painel/                  peças específicas do admin (ImovelForm…)
   lib/
     animation/
-      gsap.ts              registro único de plugins GSAP
-      motion-tokens.ts       EASE / DURATION / STAGGER compartilhados
-      use-reduced-motion.ts  hook de prefers-reduced-motion
-  data/
-    types.ts                 tipos de conteúdo (ex.: Property)
+      gsap.ts                registro único de plugins GSAP
+      motion-tokens.ts        EASE / DURATION / STAGGER compartilhados
+      use-reduced-motion.ts   hook de prefers-reduced-motion
+    auth/
+      session.ts               criptografia/gravação do cookie de sessão
+      dal.ts                    verifySession() — Data Access Layer
+      actions.ts                Server Actions de login/logout
+    prisma.ts                 singleton do PrismaClient (com driver adapter)
+    imoveis.ts                 camada de dados (queries Prisma) de Imovel/Foto
+    imoveis-schema.ts          validação zod do formulário de imóvel
+    imoveis-actions.ts         Server Actions de CRUD de imóvel/foto
+    upload.ts                  upload de foto para o Vercel Blob
+    whatsapp.ts                 monta a URL/mensagem de "Tenho interesse"
+  generated/prisma/            Prisma Client gerado (gitignored, não editar)
 public/
-  brand/                     logo oficial, favicon, quando chegarem
-  images/                    fotografia (hero, imóveis…)
+  brand/                      logo oficial, favicon, quando chegarem
+  images/                     fotografia (hero…)
 ```
 
 Regras de organização:
@@ -91,24 +150,59 @@ Regras de organização:
 - Toda a lógica de scroll/animação passa pelos utilitários de
   `lib/animation/` — não reimplementar registro de plugin, easings ou
   detecção de reduced-motion dentro de um componente de seção.
-- Dados de conteúdo (imóveis, depoimentos etc.) vivem em `src/data/`,
-  tipados. Componentes de seção importam de lá — não hardcoded inline
-  quando o conteúdo for uma lista repetível.
+- Dados de imóveis vêm do banco (`src/lib/imoveis.ts`), nunca mockados
+  em componente — o catálogo é gerenciado pelo cliente via `/painel`.
 
-## Estrutura da landing (8 seções)
+## Estrutura da landing (8 seções) — implementada
 
-1. Hero — **implementado**
+1. Hero
 2. Manifesto
-3. Imóveis em destaque
+3. **Imóveis disponíveis** — listagem real (banco de dados), filtros
+   combináveis (quartos + garagem), botão "Tenho interesse" por imóvel.
+   Substituiu a antiga vitrine curada com 3 imóveis mockados.
 4. Experiência
 5. Imóvel em destaque
 6. Sobre a Central
 7. Contato/localização
 8. CTA final
 
-As seções 2–8 ainda não foram construídas. Não adicionar novas seções
-sem autorização explícita — cada uma deve ser proposta e revisada antes
-de virar código.
+As 8 seções da landing existem. Mudanças de conteúdo/copy/visual nelas
+continuam devendo ser consistentes com este documento; novas seções ou
+reestruturações maiores ainda devem ser propostas antes de virar código.
+Fora da landing, `/imovel/[id]` e `/painel/**` são rotas funcionais — ver
+"Painel administrativo" e "Dados e autenticação" abaixo.
+
+## Dados e autenticação
+
+- **Modelos** (`prisma/schema.prisma`): `Imovel` (titulo, bairro, valor,
+  taxas opcional, quartos, temGaragem, descricao, status ATIVO/INATIVO),
+  `Foto` (url + ordem, N:1 com Imovel, `onDelete: Cascade`), `User`
+  (email + passwordHash — um único registro, o admin do painel).
+- **Sessão**: cookie `session` httpOnly/secure/sameSite=lax, JWT assinado
+  com `SESSION_SECRET` (`src/lib/auth/session.ts`). Sem tabela de sessão
+  no banco — stateless, 7 dias de validade.
+- **Autorização em duas camadas**: `src/proxy.ts` faz o check
+  otimista (cookie presente/ausente) e redireciona `/painel/**` não
+  autenticado para `/painel/login`; `verifySession()`
+  (`src/lib/auth/dal.ts`), chamado no layout do route group
+  `painel/(protected)/`, é a checagem "de verdade" antes de qualquer
+  leitura/escrita de dado administrativo.
+- **Fotos**: upload vai para o Vercel Blob (`src/lib/upload.ts`), não
+  para `public/` — o filesystem local não é gravável de forma persistente
+  em produção (serverless). Requer `BLOB_READ_WRITE_TOKEN`.
+- **WhatsApp**: `src/lib/whatsapp.ts` monta a URL `wa.me` com mensagem
+  pré-preenchida a partir dos dados do imóvel — função pura, testada com
+  `node --test` (`npm run test`). Depende de `WHATSAPP_PHONE`.
+
+## Painel administrativo
+
+- MVP de usuário único — sem múltiplos papéis, sem convite de usuário,
+  sem billing/planos (isto não é um produto multi-tenant).
+- CRUD de imóvel + fotos em `/painel/imoveis` (listar/criar/editar) e
+  exclusão inline (com confirmação) na listagem.
+- Visualmente é uma ferramenta interna: usa os tokens de cor da marca
+  (`ink`/`paper`/`gold`) mas não precisa da mesma pompa editorial da
+  landing (sem GSAP/ScrollTrigger no painel — não há necessidade).
 
 ## Regras de design
 
@@ -194,6 +288,10 @@ de virar código.
   sendo o único lugar que "desenha" a marca — não duplicar o monograma
   em outros componentes.
 - Todo asset de imagem passa por `next/image`; nada de `<img>` cru.
+- Fotos de imóveis são reais, enviadas pelo cliente via `/painel` (Vercel
+  Blob) — quando um imóvel não tem foto ainda, `PropertyPhoto` cai no
+  mesmo placeholder em gradiente do `MediaFrame`, nunca uma foto de banco
+  de imagens.
 
 ## Regras de responsividade
 
@@ -212,20 +310,26 @@ de virar código.
 
 ## O que NÃO fazer
 
-- Não copiar a estética de templates prontos de imobiliária (grid de
-  cards com preço + badge + botão "Ver detalhes" repetido).
-  A seção `page.tsx` reflete um pedaço da história, não um product grid.
+- Evitar a estética genérica de template de imobiliária (badge de preço,
+  botão "Ver detalhes", cards com sombra/borda arredondada padrão) mesmo
+  na listagem funcional de imóveis — ver `PropertyCard`: foto grande,
+  legenda mínima, sem sombra/borda, é o padrão a manter.
 - Não usar frases genéricas de IA na copy: "transformando sonhos em
   realidade", "seu sonho começa aqui", "conectamos você ao imóvel
   perfeito" e variações. Copy curta, editorial, comercial — ver o tom do
   Hero (`Endereços que permanecem.`) como referência.
 - Não inventar dados comerciais reais (endereços, preços, número de
-  imóveis vendidos, anos de mercado). Onde o protótipo precisar de
-  conteúdo de exemplo, marcar claramente como demonstrativo.
+  imóveis vendidos, anos de mercado) em copy estática. O catálogo de
+  imóveis em si é real, cadastrado pelo cliente via `/painel` — não
+  seed de imóveis fictícios em produção.
 - Não pintar seções inteiras de amarelo, nem usar o amarelo como cor de
   fundo dominante.
 - Não adicionar Three.js/WebGL, bibliotecas de animação alternativas
   (Framer Motion, AOS etc.) ou qualquer dependência nova sem necessidade
   clara — a stack de animação é GSAP + ScrollTrigger + Lenis.
-- Não avançar para as seções 2–8 da landing sem autorização explícita —
-  cada seção é revisada antes de emendar a próxima.
+- Não construir sistema de planos, cotas, múltiplos papéis de usuário ou
+  qualquer coisa multi-tenant no painel — é uma ferramenta de uso único
+  para a Central Imóveis, não um produto SaaS.
+- Novas seções da landing (além das 8 já implementadas) ou mudanças
+  estruturais grandes ainda devem ser propostas e revisadas antes de
+  virar código.

@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StatusImovel {
+  ATIVO
+  INATIVO
+}
+
+model Imovel {
+  id         String       @id @default(cuid())
+  titulo     String
+  bairro     String
+  valor      Decimal      @db.Decimal(12, 2)
+  taxas      Decimal?     @db.Decimal(12, 2)
+  quartos    Int
+  temGaragem Boolean      @default(false)
+  descricao  String
+  status     StatusImovel @default(ATIVO)
+  fotos      Foto[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([status])
+}
+
+model Foto {
+  id       String @id @default(cuid())
+  url      String
+  ordem    Int    @default(0)
+  imovel   Imovel @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  imovelId String
+
+  @@index([imovelId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
